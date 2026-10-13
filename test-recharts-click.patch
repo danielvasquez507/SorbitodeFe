@@ -1,0 +1,13 @@
+--- frontend/src/components/dashboard/EvolutionChart.jsx
++++ frontend/src/components/dashboard/EvolutionChart.jsx
+@@ -9,11 +9,12 @@
+   const [chartType, setChartType] = useState('Area');
+ 
+   const handleDateClick = (rawDate) => {
++    console.log("Date clicked:", rawDate);
+     if (!setChartFilters) return;
+     setChartFilters(prev => ({
+       ...prev,
+       date: prev.date === rawDate ? null : rawDate
+     }));
+   };

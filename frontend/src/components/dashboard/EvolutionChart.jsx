@@ -1,0 +1,183 @@
+import { useState } from 'react';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, LineChart, Line, CartesianGrid, LabelList } from 'recharts';
+import { Maximize2, Minimize2 } from 'lucide-react';
+import { formatMoney } from '../../lib/utils';
+
+export default function EvolutionChart({ data = [], showValues, isHistorical, isYearView, maximizedId, setMaximizedId, chartFilters, setChartFilters }) {
+  const [chartType, setChartType] = useState('Step');
+
+  const handleDateClick = (rawDate) => {
+    console.log("Date clicked:", rawDate);
+    if (!setChartFilters) return;
+    setChartFilters(prev => ({
+      ...prev,
+      date: prev.date === rawDate ? null : rawDate
+    }));
+  };
+
+  const dataMap = {};
+  let total = 0;
+  const totalsPorPersona = {};
+
+  let minDate = '9999-99-99';
+  let maxDate = '0000-00-00';
+  data.forEach(t => {
+      if (t.fecha && t.fecha.includes('-')) {
+          const f = t.fecha.substring(0, 10);
+          if (f < minDate) minDate = f;
+          if (f > maxDate) maxDate = f;
+      }
+  });
+
+  let groupBy = 'day';
+  if (isHistorical) {
+      groupBy = 'year';
+  } else if (isYearView) {
+      groupBy = 'month';
+  } else if (minDate !== '9999-99-99') {
+      const minYear = parseInt(minDate.substring(0, 4));
+      const maxYear = parseInt(maxDate.substring(0, 4));
+      const minMonth = parseInt(minDate.substring(5, 7));
+      const maxMonth = parseInt(maxDate.substring(5, 7));
+      const diffMonths = (maxYear - minYear) * 12 + (maxMonth - minMonth);
+      if (diffMonths > 24) groupBy = 'year';
+      else if (diffMonths > 2) groupBy = 'month';
+  }
+
+  data.forEach(t => {
+    let fecha = t.fecha || 'Sin fecha';
+    if (fecha !== 'Sin fecha') {
+        if (groupBy === 'year') fecha = fecha.substring(0, 4);
+        else if (groupBy === 'month') fecha = fecha.substring(0, 7);
+        else fecha = fecha.substring(0, 10);
+    }
+    dataMap[fecha] = (dataMap[fecha] || 0) + t.monto;
+    total += t.monto;
+    const resp = t.responsable_pago || 'Desconocido';
+    totalsPorPersona[resp] = (totalsPorPersona[resp] || 0) + t.monto;
+  });
+  
+  const isSingleYear = minDate !== '9999-99-99' && maxDate !== '0000-00-00' && minDate.substring(0, 4) === maxDate.substring(0, 4);
+
+  let chartData = Object.keys(dataMap).sort().map(k => {
+      let display = k;
+      if (k !== 'Sin fecha') {
+          if (k.length === 4) {
+              display = k;
+          } else if (k.length === 7) {
+              const [y, m] = k.split('-');
+              const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+              display = isSingleYear ? meses[parseInt(m, 10) - 1] : `${meses[parseInt(m, 10) - 1]} ${y}`;
+          } else if (k.length === 10) {
+              const [y, m, d] = k.split('-');
+              const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+              display = isSingleYear ? `${parseInt(d, 10)} ${meses[parseInt(m, 10) - 1]}` : `${parseInt(d, 10)} ${meses[parseInt(m, 10) - 1]} ${y}`;
+          }
+      }
+      return { name: display, total: dataMap[k], rawDate: k };
+  });
+  
+  if (chartData.length === 0) {
+    chartData = [{ name: 'Sin registros', total: 0 }];
+  }
+
+  return (
+    <div className="glass-panel p-6 flex flex-col h-[400px]">
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-4 flex-wrap">
+          <h2 className="text-xl font-bold text-gray-800">Total: ${formatMoney(total)}</h2>
+          {Object.entries(totalsPorPersona).map(([persona, monto]) => (
+            <div key={persona} className="flex items-center gap-1 text-sm bg-gray-100 px-3 py-1 rounded-full border border-gray-200">
+              <span className="font-semibold text-gray-600">{persona}</span>
+              <span className="font-bold text-[#5b21b6]">${formatMoney(monto)}</span>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <select 
+            value={chartType} onChange={(e) => setChartType(e.target.value)}
+            className="bg-white border border-gray-300 text-gray-700 rounded-md px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-primary shadow-sm cursor-pointer"
+          >
+            <option value="Area">Área</option>
+            <option value="Bar">Columnas</option>
+            <option value="Step">Escalonado</option>
+          </select>
+        </div>
+      </div>
+      <div className={`w-full text-xs font-semibold text-gray-500 ${maximizedId === 'evolution' ? 'h-[70vh]' : 'h-64'}`}>
+        <ResponsiveContainer width="100%" height="100%">
+          {chartType === 'Area' ? (
+            <AreaChart 
+              data={chartData} margin={{ top: 25, right: 10, left: -20, bottom: 0 }}
+              onClick={(e) => { 
+                if (e && e.activeLabel) {
+                  const clickedItem = chartData.find(d => d.name === e.activeLabel);
+                  if (clickedItem) handleDateClick(clickedItem.rawDate);
+                }
+              }}
+              style={{ cursor: 'pointer' }}
+            >
+              <defs>
+                <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.4}/>
+                  <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+              <XAxis dataKey="name" stroke="#9ca3af" tickLine={false} axisLine={false} />
+              <YAxis stroke="#9ca3af" tickLine={false} axisLine={false} tickFormatter={(value) => `$${Number(value).toLocaleString('en-US')}`} />
+              <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', color: '#1f2937' }} formatter={(value) => `$${formatMoney(Number(value))}`} />
+              <Area type="monotone" dataKey="total" stroke="#8b5cf6" strokeWidth={2} fillOpacity={1} fill="url(#colorTotal)">
+                {showValues && <LabelList dataKey="total" position="top" fill="#8b5cf6" fontSize={11} fontWeight="bold" formatter={(value) => `$${Number(Math.round(value)).toLocaleString('en-US')}`} />}
+              </Area>
+            </AreaChart>
+          ) : chartType === 'Bar' ? (
+            <BarChart 
+              data={chartData} margin={{ top: 25, right: 10, left: -20, bottom: 0 }}
+              onClick={(e) => { 
+                if (e && e.activeLabel) {
+                  const clickedItem = chartData.find(d => d.name === e.activeLabel);
+                  if (clickedItem) handleDateClick(clickedItem.rawDate);
+                }
+              }}
+              style={{ cursor: 'pointer' }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false}/>
+              <XAxis dataKey="name" stroke="#9ca3af" tickLine={false} axisLine={false}/>
+              <YAxis stroke="#9ca3af" tickLine={false} axisLine={false} tickFormatter={(value) => `$${Number(value).toLocaleString('en-US')}`} />
+              <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', color: '#1f2937' }} formatter={(value) => `$${formatMoney(Number(value))}`} />
+              <Bar dataKey="total" fill="#8b5cf6" radius={[4, 4, 0, 0]}>
+                 {showValues && <LabelList dataKey="total" position="top" fill="#8b5cf6" fontSize={11} fontWeight="bold" formatter={(value) => `$${Number(Math.round(value)).toLocaleString('en-US')}`} />}
+              </Bar>
+            </BarChart>
+          ) : chartType === 'Step' ? (
+            <AreaChart 
+              data={chartData} margin={{ top: 25, right: 10, left: -20, bottom: 0 }}
+              onClick={(e) => { 
+                if (e && e.activeLabel) {
+                  const clickedItem = chartData.find(d => d.name === e.activeLabel);
+                  if (clickedItem) handleDateClick(clickedItem.rawDate);
+                }
+              }}
+              style={{ cursor: 'pointer' }}
+            >
+              <defs>
+                <linearGradient id="colorStep" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+              <XAxis dataKey="name" stroke="#9ca3af" tickLine={false} axisLine={false} />
+              <YAxis stroke="#9ca3af" tickLine={false} axisLine={false} tickFormatter={(value) => `$${Number(value).toLocaleString('en-US')}`} />
+              <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', color: '#1f2937' }} formatter={(value) => `$${formatMoney(Number(value))}`} />
+              <Area type="step" dataKey="total" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorStep)">
+                {showValues && <LabelList dataKey="total" position="top" fill="#10b981" fontSize={11} fontWeight="bold" formatter={(value) => `$${Number(Math.round(value)).toLocaleString('en-US')}`} />}
+              </Area>
+            </AreaChart>
+          ) : null}
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}

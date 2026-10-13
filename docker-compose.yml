@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  backend:
+    image: node:22
+    container_name: sorbito-backend
+    working_dir: /usr/src/app
+    command: sh -c "npm install && node index.js"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend:/usr/src/app
+      - /usr/src/app/node_modules
+      - ./database:/usr/src/app/database
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+    restart: unless-stopped
+
+  frontend:
+    image: node:22
+    container_name: sorbito-frontend
+    working_dir: /usr/src/app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    ports:
+      - "8080:5173"
+    volumes:
+      - ./frontend:/usr/src/app
+      - /usr/src/app/node_modules
+    depends_on:
+      - backend
+    restart: unless-stopped
