@@ -95,6 +95,26 @@ app.get('/api/logs', (req, res) => {
     }
 });
 
+app.get('/api/gemini-logs', (req, res) => {
+    try {
+        const rows = db.prepare("SELECT * FROM gemini_logs ORDER BY id DESC LIMIT 100").all();
+        const formatted = rows.map(r => {
+            let input_payload = r.input_payload;
+            let output_payload = r.output_payload;
+            try { input_payload = JSON.parse(r.input_payload); } catch(e) {}
+            try { output_payload = JSON.parse(r.output_payload); } catch(e) {}
+            return {
+                ...r,
+                input_payload,
+                output_payload
+            };
+        });
+        res.json(formatted);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.get('/api/matriz', (req, res) => {
     try {
         const stmt = db.prepare(`

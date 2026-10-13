@@ -24,6 +24,26 @@ const config = {
     }
 };
 
+function logGeminiEvent(model, tipo, inputPayload, outputPayload, status) {
+    try {
+        if (!currentRunId) currentRunId = Date.now().toString();
+        db.prepare(`
+            INSERT INTO gemini_logs (run_id, timestamp, model, tipo, input_payload, output_payload, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            currentRunId,
+            new Date().toISOString(),
+            model,
+            tipo,
+            typeof inputPayload === 'string' ? inputPayload : JSON.stringify(inputPayload),
+            typeof outputPayload === 'string' ? outputPayload : JSON.stringify(outputPayload),
+            status
+        );
+    } catch (e) {
+        console.error('[Gemini Log Error]', e.message);
+    }
+}
+
 async function obtenerCategoriaGemini(comercio) {
     if (!comercio || comercio === "Desconocido") return "Otra";
     const prompt = `
@@ -38,16 +58,19 @@ REGLAS DE ORO:
 
 Devuelve únicamente un JSON válido con la clave "categoria". Ejemplo: {"categoria": "Supermercado"}
     `;
+    const model = 'gemini-3.5-flash-lite';
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-3.5-flash-lite',
+            model: model,
             contents: prompt,
             config: { responseMimeType: "application/json" }
         });
         const data = JSON.parse(response.text);
+        logGeminiEvent(model, 'individual', { comercio, prompt }, data, 'SUCCESS');
         return data.categoria || "Otra";
     } catch (error) {
         console.error(`[Gemini API] Error al clasificar ${comercio}:`, error.message);
+        logGeminiEvent(model, 'individual', { comercio, prompt }, { error: error.message }, 'ERROR');
         return "Otra"; // Fallback seguro
     }
 }
@@ -251,8 +274,10 @@ ${JSON.stringify(comerciosArray)}
             
             categoriasMapa = JSON.parse(response.text);
             const numRecibidos = Object.keys(categoriasMapa).length;
+            logGeminiEvent('gemini-3.5-flash-lite', 'masivo', { comercios: comerciosArray, prompt }, categoriasMapa, 'SUCCESS');
             logEvent('SUCCESS', `Gemini envió exitosamente ${numRecibidos} categorías deducidas.`);
         } catch (error) {
+            logGeminiEvent('gemini-3.5-flash-lite', 'masivo', { comercios: Array.from(comerciosUnicos) }, { error: error.message }, 'ERROR');
             logEvent('ERROR', `Fallo crítico en Gemini. Detalles: ${error.message}. Se usará 'Otra' por defecto.`);
             console.error("Detalle completo del error Gemini:", error);
         }

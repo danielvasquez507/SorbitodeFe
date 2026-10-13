@@ -31,8 +31,21 @@ function initDB() {
             message TEXT NOT NULL
         );
     `;
+    const createGeminiLogsTable = `
+        CREATE TABLE IF NOT EXISTS gemini_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            model TEXT NOT NULL,
+            tipo TEXT NOT NULL,
+            input_payload TEXT NOT NULL,
+            output_payload TEXT NOT NULL,
+            status TEXT NOT NULL
+        );
+    `;
     db.exec(createTable);
     db.exec(createLogsTable);
+    db.exec(createGeminiLogsTable);
     console.log("Database initialized successfully.");
 }
 
